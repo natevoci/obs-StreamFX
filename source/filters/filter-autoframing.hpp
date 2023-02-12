@@ -1,6 +1,7 @@
 /*
  * Modern effects for a modern Streamer
  * Copyright (C) 2020 Michael Fabian Dirks
+ * Copyright (C) 2023 Nate <natevoci @ github>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -155,7 +156,7 @@ namespace streamfx::filter::autoframing {
 		void nvar_facedetection_unload();
 		void nvar_facedetection_process();
 		void nvar_facedetection_properties(obs_properties_t* props);
-		void nvar_facedetection_update(obs_data_t* data);
+		void nvar_facedetection_update();
 #endif
 	};
 

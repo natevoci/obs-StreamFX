@@ -1,6 +1,7 @@
 /*
  * Modern effects for a modern Streamer
  * Copyright (C) 2020 Michael Fabian Dirks
+ * Copyright (C) 2023 Nate <natevoci @ github>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -380,7 +381,7 @@ void autoframing_instance::update(obs_data_t* data)
 			switch (_provider) {
 #ifdef ENABLE_FILTER_UPSCALING_NVIDIA
 			case tracking_provider::NVIDIA_FACEDETECTION:
-				nvar_facedetection_update(data);
+				nvar_facedetection_update();
 				break;
 #endif
 			default:
@@ -945,6 +946,7 @@ void streamfx::filter::autoframing::autoframing_instance::task_switch_provider(u
 void streamfx::filter::autoframing::autoframing_instance::nvar_facedetection_load()
 {
 	_nvidia_fx = std::make_shared<::streamfx::nvidia::ar::facedetection>();
+	nvar_facedetection_update();
 }
 
 void streamfx::filter::autoframing::autoframing_instance::nvar_facedetection_unload()
@@ -1033,7 +1035,7 @@ void streamfx::filter::autoframing::autoframing_instance::nvar_facedetection_pro
 
 void streamfx::filter::autoframing::autoframing_instance::nvar_facedetection_properties(obs_properties_t* props) {}
 
-void streamfx::filter::autoframing::autoframing_instance::nvar_facedetection_update(obs_data_t* data)
+void streamfx::filter::autoframing::autoframing_instance::nvar_facedetection_update()
 {
 	if (!_nvidia_fx) {
 		return;
