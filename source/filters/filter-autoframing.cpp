@@ -280,8 +280,8 @@ void autoframing_instance::update(obs_data_t* data)
 
 	// Framing
 	{ // Smoothing
-		_frame_stability        = static_cast<float>(obs_data_get_double(data, ST_KEY_FRAMING_STABILITY)) / 100.f;
-		_frame_stability_kalman = streamfx::util::math::lerp<float>(1.0f, 0.00001f, _frame_stability);
+		_frame_stability         = static_cast<float>(obs_data_get_double(data, ST_KEY_FRAMING_STABILITY)) / 100.f;
+		_frame_stability_kalman  = streamfx::util::math::lerp<float>(1.0f, 0.00001f, _frame_stability);
 
 		_frame_pos_x  = {_frame_stability_kalman, 1.0f, ST_KALMAN_EEC, _frame_pos_x.get()};
 		_frame_pos_y  = {_frame_stability_kalman, 1.0f, ST_KALMAN_EEC, _frame_pos_y.get()};
@@ -571,44 +571,44 @@ void autoframing_instance::video_render(gs_effect_t* effect)
 				_gfx_debug->draw_arrow(kv.first->pos.x, kv.first->pos.y, kv.first->pos.x + kv.first->vel.x,
 									   kv.first->pos.y + kv.first->vel.y, 0., 0x7E000000);
 
-				// Predicted Area (Orange)
-				_gfx_debug->draw_rectangle(kv.second->mp_pos.x - kv.first->size.x / 2.f,
-										   kv.second->mp_pos.y - kv.first->size.y / 2.f, kv.first->size.x,
-										   kv.first->size.y, true, 0x7E007EFF);
+					// Predicted Area (Orange)
+					_gfx_debug->draw_rectangle(kv.second->mp_pos.x - kv.first->size.x / 2.f,
+											   kv.second->mp_pos.y - kv.first->size.y / 2.f, kv.first->size.x,
+											   kv.first->size.y, true, 0x7E007EFF);
 
-				// Filtered Area (Yellow)
-				_gfx_debug->draw_rectangle(kv.second->filter_pos_x.get() - kv.second->filter_size_x.get() / 2.f,
-										   kv.second->filter_pos_y.get() - kv.second->filter_size_y.get() / 2.f,
-										   kv.second->filter_size_x.get(),
-										   kv.second->filter_size_y.get(),
-										   true, 0x7E00FFFF);
-				{
-					float x = kv.second->filter_pos_x.get() - kv.second->filter_size_x.get() / 2.f;
-					float y = kv.second->filter_pos_y.get() - kv.second->filter_size_y.get() / 2.f;
-					// Draw index indicator
-					for (int i = 0; i < index; i++) {
-						float xPos = x + (float)i * x_indicator_spacing;
-						_gfx_debug->draw_line(xPos, y, xPos, y - y_indicator_height, 0xDE00FFFF);
+					// Filtered Area (Yellow)
+					_gfx_debug->draw_rectangle(kv.second->filter_pos_x.get() - kv.second->filter_size_x.get() / 2.f,
+											   kv.second->filter_pos_y.get() - kv.second->filter_size_y.get() / 2.f,
+											   kv.second->filter_size_x.get(),
+											   kv.second->filter_size_y.get(),
+											   true, 0x7E00FFFF);
+					{
+						float x = kv.second->filter_pos_x.get() - kv.second->filter_size_x.get() / 2.f;
+						float y = kv.second->filter_pos_y.get() - kv.second->filter_size_y.get() / 2.f;
+						// Draw index indicator
+						for (int i = 0; i < index; i++) {
+							float xPos = x + (float)i * x_indicator_spacing;
+							_gfx_debug->draw_line(xPos, y, xPos, y - y_indicator_height, 0xDE00FFFF);
+						}
 					}
+
+					// Offset Filtered Area (Blue)
+					_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->filter_size_x.get() / 2.f,
+											   kv.second->offset_pos.y - kv.second->filter_size_y.get() / 2.f,
+											   kv.second->filter_size_x.get(),
+											   kv.second->filter_size_y.get(),
+											   true, 0x7EFF0000);
+
+					// Padded Offset Filtered Area (Cyan)
+					_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->pad_size.x / 2.f,
+											   kv.second->offset_pos.y - kv.second->pad_size.y / 2.f, kv.second->pad_size.x,
+											   kv.second->pad_size.y, true, 0x7EFFFF00);
+
+					// Aspect-Ratio-Corrected Padded Offset Filtered Area (Green)
+					_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->aspected_size.x / 2.f,
+											   kv.second->offset_pos.y - kv.second->aspected_size.y / 2.f,
+											   kv.second->aspected_size.x, kv.second->aspected_size.y, true, 0x7E00FF00);
 				}
-
-				// Offset Filtered Area (Blue)
-				_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->filter_size_x.get() / 2.f,
-										   kv.second->offset_pos.y - kv.second->filter_size_y.get() / 2.f,
-										   kv.second->filter_size_x.get(),
-										   kv.second->filter_size_y.get(),
-										   true, 0x7EFF0000);
-
-				// Padded Offset Filtered Area (Cyan)
-				_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->pad_size.x / 2.f,
-										   kv.second->offset_pos.y - kv.second->pad_size.y / 2.f, kv.second->pad_size.x,
-										   kv.second->pad_size.y, true, 0x7EFFFF00);
-
-				// Aspect-Ratio-Corrected Padded Offset Filtered Area (Green)
-				_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->aspected_size.x / 2.f,
-										   kv.second->offset_pos.y - kv.second->aspected_size.y / 2.f,
-										   kv.second->aspected_size.x, kv.second->aspected_size.y, true, 0x7E00FF00);
-			}
 
 			// Final Region (White)
 			_gfx_debug->draw_rectangle(_frame_pos.x - _frame_size.x / 2.f, _frame_pos.y - _frame_size.y / 2.f,
@@ -1010,6 +1010,8 @@ void streamfx::filter::autoframing::autoframing_instance::nvar_facedetection_pro
 
 	// If there are tracked faces, merge them with the tracked elements.
 	if (auto edx = _nvidia_fx->count(); edx > 0) {
+		std::list<std::shared_ptr<track_el>> boxes;
+
 		for (size_t idx = 0; idx < edx; idx++) {
 			float confidence = 0.;
 			auto  rect       = _nvidia_fx->at(idx, confidence);
@@ -1025,52 +1027,58 @@ void streamfx::filter::autoframing::autoframing_instance::nvar_facedetection_pro
 			pos.x = rect.x + (rect.z / 2.f);
 			pos.y = rect.y + (rect.w / 2.f);
 
-			// Try and find a match in the current list of tracked elements.
-			std::shared_ptr<track_el> match;
-			float                     match_dst = max_dst;
-			for (const auto& el : _tracked_elements) {
-				// Skip "fresh" elements.
-				if (el->age < 0.00001) {
-					continue;
-				}
+			// Create potential match
+			auto match = std::make_shared<track_el>();
+			vec2_copy(&match->pos, &pos);
+			vec2_set(&match->size, rect.z, rect.w);
+			vec2_set(&match->vel, 0., 0.);
+			match->age = 0.;
+			match->confidence = confidence > 1.f ? 1.f : confidence; // confidence values go above 1 in SOLO mode.
+
+			boxes.push_back(match);
+		}
+
+		for (const auto& el : _tracked_elements) {
+			// Search for matches for existing tracked elements
+			auto match_iter = boxes.end();
+			float match_dst = max_dst;
+
+			auto iter = boxes.begin();
+			while (iter != boxes.end()) {
+				auto box = (*iter);
 
 				// Check if the distance is within acceptable bounds.
-				float dst = vec2_dist(&pos, &el->pos);
+				float dst = vec2_dist(&box->pos, &el->pos);
 				if ((dst < match_dst) && (dst < max_dst)) {
-					match_dst = dst;
-					match     = el;
+					match_dst  = dst;
+					match_iter = iter;
 				}
+
+				iter++;
 			}
 
-			// Do we have a match?
-			if (!match) {
-				// No, so create a new one.
-				match = std::make_shared<track_el>();
-
-				// Insert it.
-				_tracked_elements.push_back(match);
-
-				// Update information.
-				vec2_copy(&match->pos, &pos);
-				vec2_set(&match->size, rect.z, rect.w);
-				vec2_set(&match->vel, 0., 0.);
-				match->age = 0.;
-				match->confidence = confidence;
-			} else {
-				// Reset the age to 0.
-				match->age = 0.;
+			// If a match was found
+			if (match_iter != boxes.end()) {
+				auto match = *match_iter;
 
 				// Calculate the velocity between changes.
 				vec2 vel;
-				vec2_sub(&vel, &pos, &match->pos);
+				vec2_sub(&vel, &el->pos, &match->pos);
 
 				// Update information.
-				vec2_copy(&match->pos, &pos);
-				vec2_set(&match->size, rect.z, rect.w);
-				vec2_copy(&match->vel, &vel);
-				match->age = 0.;
-				match->confidence = confidence;
+				vec2_copy(&el->pos, &match->pos);
+				vec2_copy(&el->size, &match->size);
+				vec2_copy(&el->vel, &vel);
+					el->age = 0.;
+				el->confidence = match->confidence;
+
+				boxes.erase(match_iter);
 			}
+		}
+
+		// Add new tracked elements for each remaining unmatched box
+		for (auto box : boxes) {
+			_tracked_elements.push_back(box);
 		}
 	}
 }
@@ -1217,7 +1225,7 @@ obs_properties_t* autoframing_factory::get_properties2(autoframing_instance* dat
 			auto p = obs_properties_add_text(grp, ST_KEY_TRACKING_FREQUENCY, D_TRANSLATE(ST_I18N_TRACKING_FREQUENCY),
 											 OBS_TEXT_DEFAULT);
 		}
-	}
+		}
 
 	{
 		auto grp = obs_properties_create();
