@@ -72,6 +72,10 @@ namespace streamfx::filter::autoframing {
 			streamfx::util::math::kalman1D<float> filter_pos_x;
 			streamfx::util::math::kalman1D<float> filter_pos_y;
 
+			// Filtered Position
+			streamfx::util::math::kalman1D<float> filter_size_x;
+			streamfx::util::math::kalman1D<float> filter_size_y;
+
 			// Offset Filtered Position
 			vec2 offset_pos;
 

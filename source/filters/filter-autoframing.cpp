@@ -268,10 +268,14 @@ void autoframing_instance::update(obs_data_t* data)
 	_motion_smoothing_kalman_mnc = streamfx::util::math::lerp<float>(0.001f, 1000.0f, _motion_smoothing);
 	for (auto kv : _predicted_elements) {
 		// Regenerate filters.
-		kv.second->filter_pos_x = {_frame_stability_kalman, _motion_smoothing_kalman_mnc, ST_KALMAN_EEC,
-								   kv.second->filter_pos_x.get()};
-		kv.second->filter_pos_y = {_frame_stability_kalman, _motion_smoothing_kalman_mnc, ST_KALMAN_EEC,
-								   kv.second->filter_pos_y.get()};
+		kv.second->filter_pos_x  = {_motion_smoothing_kalman_pnc, _motion_smoothing_kalman_mnc, ST_KALMAN_EEC,
+									kv.second->filter_pos_x.get()};
+		kv.second->filter_pos_y  = {_motion_smoothing_kalman_pnc, _motion_smoothing_kalman_mnc, ST_KALMAN_EEC,
+									kv.second->filter_pos_y.get()};
+		kv.second->filter_size_x = {_motion_smoothing_kalman_pnc, _motion_smoothing_kalman_mnc, ST_KALMAN_EEC,
+									kv.second->filter_size_x.get()};
+		kv.second->filter_size_y = {_motion_smoothing_kalman_pnc, _motion_smoothing_kalman_mnc, ST_KALMAN_EEC,
+									kv.second->filter_size_y.get()};
 	}
 
 	// Framing
@@ -557,14 +561,18 @@ void autoframing_instance::video_render(gs_effect_t* effect)
 										   kv.first->size.y, true, 0x7E007EFF);
 
 				// Filtered Area (Yellow)
-				_gfx_debug->draw_rectangle(kv.second->filter_pos_x.get() - kv.first->size.x / 2.f,
-										   kv.second->filter_pos_y.get() - kv.first->size.y / 2.f, kv.first->size.x,
-										   kv.first->size.y, true, 0x7E00FFFF);
+				_gfx_debug->draw_rectangle(kv.second->filter_pos_x.get() - kv.second->filter_size_x.get() / 2.f,
+										   kv.second->filter_pos_y.get() - kv.second->filter_size_y.get() / 2.f,
+										   kv.second->filter_size_x.get(),
+										   kv.second->filter_size_y.get(),
+										   true, 0x7E00FFFF);
 
 				// Offset Filtered Area (Blue)
-				_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.first->size.x / 2.f,
-										   kv.second->offset_pos.y - kv.first->size.y / 2.f, kv.first->size.x,
-										   kv.first->size.y, true, 0x7EFF0000);
+				_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->filter_size_x.get() / 2.f,
+										   kv.second->offset_pos.y - kv.second->filter_size_y.get() / 2.f,
+										   kv.second->filter_size_x.get(),
+										   kv.second->filter_size_y.get(),
+										   true, 0x7EFF0000);
 
 				// Padded Offset Filtered Area (Cyan)
 				_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->pad_size.x / 2.f,
@@ -672,10 +680,15 @@ void streamfx::filter::autoframing::autoframing_instance::tracking_tick(float se
 		if (iter == _predicted_elements.end()) {
 			pred = std::make_shared<pred_el>();
 			_predicted_elements.insert_or_assign(trck, pred);
-			pred->filter_pos_x = {_motion_smoothing_kalman_pnc, _motion_smoothing_kalman_mnc, ST_KALMAN_EEC,
-								  trck->pos.x};
-			pred->filter_pos_y = {_motion_smoothing_kalman_pnc, _motion_smoothing_kalman_mnc, ST_KALMAN_EEC,
-								  trck->pos.y};
+			pred->filter_pos_x  = {_motion_smoothing_kalman_pnc, _motion_smoothing_kalman_mnc, ST_KALMAN_EEC,
+								   trck->pos.x};
+			pred->filter_pos_y  = {_motion_smoothing_kalman_pnc, _motion_smoothing_kalman_mnc, ST_KALMAN_EEC,
+								   trck->pos.y};
+			pred->filter_size_x = {_motion_smoothing_kalman_pnc, _motion_smoothing_kalman_mnc, ST_KALMAN_EEC,
+								   trck->size.x};
+			pred->filter_size_y = {_motion_smoothing_kalman_pnc, _motion_smoothing_kalman_mnc, ST_KALMAN_EEC,
+								   trck->size.y};
+
 		} else {
 			pred = iter->second;
 		}
@@ -699,16 +712,18 @@ void streamfx::filter::autoframing::autoframing_instance::tracking_tick(float se
 		// Update filtered position.
 		pred->filter_pos_x.filter(pred->mp_pos.x);
 		pred->filter_pos_y.filter(pred->mp_pos.y);
+		pred->filter_size_x.filter(trck->size.x);
+		pred->filter_size_y.filter(trck->size.y);
 
 		// Update offset position.
 		vec2_set(&pred->offset_pos, pred->filter_pos_x.get(), pred->filter_pos_y.get());
 		if (_frame_offset_prc[0]) { // %
-			pred->offset_pos.x += trck->size.x * (-_frame_offset.x);
+			pred->offset_pos.x += pred->filter_size_x.get() * (-_frame_offset.x);
 		} else { // Pixels
 			pred->offset_pos.x += _frame_offset.x;
 		}
 		if (_frame_offset_prc[1]) { // %
-			pred->offset_pos.y += trck->size.y * (-_frame_offset.y);
+			pred->offset_pos.y += pred->filter_size_y.get() * (-_frame_offset.y);
 		} else { // Pixels
 			pred->offset_pos.y += _frame_offset.y;
 		}
@@ -716,12 +731,12 @@ void streamfx::filter::autoframing::autoframing_instance::tracking_tick(float se
 		// Calculate padded area.
 		vec2_copy(&pred->pad_size, &trck->size);
 		if (_frame_padding_prc[0]) { // %
-			pred->pad_size.x += trck->size.x * (-_frame_padding.x) * 2.f;
+			pred->pad_size.x += pred->filter_size_x.get() * (-_frame_padding.x) * 2.f;
 		} else { // Pixels
 			pred->pad_size.x += _frame_padding.x * 2.f;
 		}
 		if (_frame_padding_prc[1]) { // %
-			pred->pad_size.y += trck->size.y * (-_frame_padding.y) * 2.f;
+			pred->pad_size.y += pred->filter_size_y.get() * (-_frame_padding.y) * 2.f;
 		} else { // Pixels
 			pred->pad_size.y += _frame_padding.y * 2.f;
 		}
