@@ -62,6 +62,7 @@ namespace streamfx::filter::autoframing {
 			vec2  pos;
 			vec2  size;
 			vec2  vel;
+			float confidence;
 		};
 
 		struct pred_el {

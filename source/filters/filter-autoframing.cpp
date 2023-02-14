@@ -545,11 +545,27 @@ void autoframing_instance::video_render(gs_effect_t* effect)
 				gs_draw_sprite(nullptr, 0, _size.first, _size.second);
 			}
 
+			int index = 0;
 			for (auto kv : _predicted_elements) {
+				index++;
+				float x_indicator_spacing = kv.first->size.x / 8.f;
+				float y_indicator_height  = kv.first->size.y / 5.f;
+
 				// Tracked Area (Red)
 				_gfx_debug->draw_rectangle(kv.first->pos.x - kv.first->size.x / 2.f,
 										   kv.first->pos.y - kv.first->size.y / 2.f, kv.first->size.x, kv.first->size.y,
 										   true, 0x7E0000FF);
+				{
+					float x = kv.first->pos.x - kv.first->size.x / 2.f;
+					float y = kv.first->pos.y - kv.first->size.y / 2.f;
+					// Draw index indicator
+					for (int i = 0; i < index; i++) {
+						float xPos = x + (float)i * x_indicator_spacing;
+						_gfx_debug->draw_line(xPos, y, xPos, y - y_indicator_height, 0xDE0000FF);
+					}
+					// Draw confidence line
+					_gfx_debug->draw_line(x, y, x + kv.first->confidence * kv.first->size.x, y, 0xFFFFFFFF);
+				}
 
 				// Velocity Arrow (Black)
 				_gfx_debug->draw_arrow(kv.first->pos.x, kv.first->pos.y, kv.first->pos.x + kv.first->vel.x,
@@ -566,6 +582,15 @@ void autoframing_instance::video_render(gs_effect_t* effect)
 										   kv.second->filter_size_x.get(),
 										   kv.second->filter_size_y.get(),
 										   true, 0x7E00FFFF);
+				{
+					float x = kv.second->filter_pos_x.get() - kv.second->filter_size_x.get() / 2.f;
+					float y = kv.second->filter_pos_y.get() - kv.second->filter_size_y.get() / 2.f;
+					// Draw index indicator
+					for (int i = 0; i < index; i++) {
+						float xPos = x + (float)i * x_indicator_spacing;
+						_gfx_debug->draw_line(xPos, y, xPos, y - y_indicator_height, 0xDE00FFFF);
+					}
+				}
 
 				// Offset Filtered Area (Blue)
 				_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->filter_size_x.get() / 2.f,
@@ -1030,6 +1055,7 @@ void streamfx::filter::autoframing::autoframing_instance::nvar_facedetection_pro
 				vec2_set(&match->size, rect.z, rect.w);
 				vec2_set(&match->vel, 0., 0.);
 				match->age = 0.;
+				match->confidence = confidence;
 			} else {
 				// Reset the age to 0.
 				match->age = 0.;
@@ -1043,6 +1069,7 @@ void streamfx::filter::autoframing::autoframing_instance::nvar_facedetection_pro
 				vec2_set(&match->size, rect.z, rect.w);
 				vec2_copy(&match->vel, &vel);
 				match->age = 0.;
+				match->confidence = confidence;
 			}
 		}
 	}
