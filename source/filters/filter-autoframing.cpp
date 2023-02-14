@@ -282,11 +282,12 @@ void autoframing_instance::update(obs_data_t* data)
 	{ // Smoothing
 		_frame_stability         = static_cast<float>(obs_data_get_double(data, ST_KEY_FRAMING_STABILITY)) / 100.f;
 		_frame_stability_kalman  = streamfx::util::math::lerp<float>(1.0f, 0.00001f, _frame_stability);
+		auto frame_stability_mnc = streamfx::util::math::lerp<float>(0.001f, 1000.0f, _frame_stability);
 
-		_frame_pos_x  = {_frame_stability_kalman, 1.0f, ST_KALMAN_EEC, _frame_pos_x.get()};
-		_frame_pos_y  = {_frame_stability_kalman, 1.0f, ST_KALMAN_EEC, _frame_pos_y.get()};
-		_frame_size_x = {_frame_stability_kalman, 1.0f, ST_KALMAN_EEC, _frame_size_x.get()};
-		_frame_size_y = {_frame_stability_kalman, 1.0f, ST_KALMAN_EEC, _frame_size_y.get()};
+		_frame_pos_x  = {_frame_stability_kalman, frame_stability_mnc, ST_KALMAN_EEC, _frame_pos_x.get()};
+		_frame_pos_y  = {_frame_stability_kalman, frame_stability_mnc, ST_KALMAN_EEC, _frame_pos_y.get()};
+		_frame_size_x = {_frame_stability_kalman, frame_stability_mnc, ST_KALMAN_EEC, _frame_size_x.get()};
+		_frame_size_y = {_frame_stability_kalman, frame_stability_mnc, ST_KALMAN_EEC, _frame_size_y.get()};
 	}
 	{ // Padding
 		if (const char* text = obs_data_get_string(data, ST_KEY_FRAMING_PADDING ".X"); text != nullptr) {
@@ -571,44 +572,44 @@ void autoframing_instance::video_render(gs_effect_t* effect)
 				_gfx_debug->draw_arrow(kv.first->pos.x, kv.first->pos.y, kv.first->pos.x + kv.first->vel.x,
 									   kv.first->pos.y + kv.first->vel.y, 0., 0x7E000000);
 
-					// Predicted Area (Orange)
-					_gfx_debug->draw_rectangle(kv.second->mp_pos.x - kv.first->size.x / 2.f,
-											   kv.second->mp_pos.y - kv.first->size.y / 2.f, kv.first->size.x,
-											   kv.first->size.y, true, 0x7E007EFF);
+				// Predicted Area (Orange)
+				_gfx_debug->draw_rectangle(kv.second->mp_pos.x - kv.first->size.x / 2.f,
+										   kv.second->mp_pos.y - kv.first->size.y / 2.f, kv.first->size.x,
+										   kv.first->size.y, true, 0x7E007EFF);
 
-					// Filtered Area (Yellow)
-					_gfx_debug->draw_rectangle(kv.second->filter_pos_x.get() - kv.second->filter_size_x.get() / 2.f,
-											   kv.second->filter_pos_y.get() - kv.second->filter_size_y.get() / 2.f,
-											   kv.second->filter_size_x.get(),
-											   kv.second->filter_size_y.get(),
-											   true, 0x7E00FFFF);
-					{
-						float x = kv.second->filter_pos_x.get() - kv.second->filter_size_x.get() / 2.f;
-						float y = kv.second->filter_pos_y.get() - kv.second->filter_size_y.get() / 2.f;
-						// Draw index indicator
-						for (int i = 0; i < index; i++) {
-							float xPos = x + (float)i * x_indicator_spacing;
-							_gfx_debug->draw_line(xPos, y, xPos, y - y_indicator_height, 0xDE00FFFF);
-						}
+				// Filtered Area (Yellow)
+				_gfx_debug->draw_rectangle(kv.second->filter_pos_x.get() - kv.second->filter_size_x.get() / 2.f,
+										   kv.second->filter_pos_y.get() - kv.second->filter_size_y.get() / 2.f,
+										   kv.second->filter_size_x.get(),
+										   kv.second->filter_size_y.get(),
+										   true, 0x7E00FFFF);
+				{
+					float x = kv.second->filter_pos_x.get() - kv.second->filter_size_x.get() / 2.f;
+					float y = kv.second->filter_pos_y.get() - kv.second->filter_size_y.get() / 2.f;
+					// Draw index indicator
+					for (int i = 0; i < index; i++) {
+						float xPos = x + (float)i * x_indicator_spacing;
+						_gfx_debug->draw_line(xPos, y, xPos, y - y_indicator_height, 0xDE00FFFF);
 					}
-
-					// Offset Filtered Area (Blue)
-					_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->filter_size_x.get() / 2.f,
-											   kv.second->offset_pos.y - kv.second->filter_size_y.get() / 2.f,
-											   kv.second->filter_size_x.get(),
-											   kv.second->filter_size_y.get(),
-											   true, 0x7EFF0000);
-
-					// Padded Offset Filtered Area (Cyan)
-					_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->pad_size.x / 2.f,
-											   kv.second->offset_pos.y - kv.second->pad_size.y / 2.f, kv.second->pad_size.x,
-											   kv.second->pad_size.y, true, 0x7EFFFF00);
-
-					// Aspect-Ratio-Corrected Padded Offset Filtered Area (Green)
-					_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->aspected_size.x / 2.f,
-											   kv.second->offset_pos.y - kv.second->aspected_size.y / 2.f,
-											   kv.second->aspected_size.x, kv.second->aspected_size.y, true, 0x7E00FF00);
 				}
+
+				// Offset Filtered Area (Blue)
+				_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->filter_size_x.get() / 2.f,
+										   kv.second->offset_pos.y - kv.second->filter_size_y.get() / 2.f,
+										   kv.second->filter_size_x.get(),
+										   kv.second->filter_size_y.get(),
+										   true, 0x7EFF0000);
+
+				// Padded Offset Filtered Area (Cyan)
+				_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->pad_size.x / 2.f,
+										   kv.second->offset_pos.y - kv.second->pad_size.y / 2.f, kv.second->pad_size.x,
+										   kv.second->pad_size.y, true, 0x7EFFFF00);
+
+				// Aspect-Ratio-Corrected Padded Offset Filtered Area (Green)
+				_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->aspected_size.x / 2.f,
+										   kv.second->offset_pos.y - kv.second->aspected_size.y / 2.f,
+										   kv.second->aspected_size.x, kv.second->aspected_size.y, true, 0x7E00FF00);
+			}
 
 			// Final Region (White)
 			_gfx_debug->draw_rectangle(_frame_pos.x - _frame_size.x / 2.f, _frame_pos.y - _frame_size.y / 2.f,
@@ -1069,7 +1070,7 @@ void streamfx::filter::autoframing::autoframing_instance::nvar_facedetection_pro
 				vec2_copy(&el->pos, &match->pos);
 				vec2_copy(&el->size, &match->size);
 				vec2_copy(&el->vel, &vel);
-					el->age = 0.;
+				el->age = 0.;
 				el->confidence = match->confidence;
 
 				boxes.erase(match_iter);
@@ -1225,7 +1226,7 @@ obs_properties_t* autoframing_factory::get_properties2(autoframing_instance* dat
 			auto p = obs_properties_add_text(grp, ST_KEY_TRACKING_FREQUENCY, D_TRANSLATE(ST_I18N_TRACKING_FREQUENCY),
 											 OBS_TEXT_DEFAULT);
 		}
-		}
+	}
 
 	{
 		auto grp = obs_properties_create();
