@@ -860,7 +860,31 @@ void streamfx::filter::autoframing::autoframing_instance::tracking_tick(float se
 							   ? _frame_aspect_ratio
 							   : (static_cast<float>(_size.first) / static_cast<float>(_size.second));
 
-			{ // 1. Adjust aspect ratio so that all elements end up contained.
+			vec2 output_min;
+			vec2 output_max;
+			vec2_zero(&output_min);
+			vec2_set(&output_max, _size.first, _size.second);
+
+			{ // 1. Crop frame to visible area
+				vec2 frame_half_size;
+				vec2 frame_min;
+				vec2 frame_max;
+
+				vec2_mulf(&frame_half_size, &_frame_size, .5f);
+				vec2_sub(&frame_min, &_frame_pos, &frame_half_size);
+				vec2_add(&frame_max, &_frame_pos, &frame_half_size);
+
+				vec2_max(&frame_min, &frame_min, &output_min);
+				vec2_min(&frame_max, &frame_max, &output_max);
+
+				vec2_add(&_frame_pos, &frame_min, &frame_max);
+				vec2_divf(&_frame_pos, &_frame_pos, 2.f);
+
+				vec2_copy(&_frame_size, &frame_max);
+				vec2_sub(&_frame_size, &_frame_size, &frame_min);
+			}
+
+			{ // 2. Adjust the aspect ratio so that all elements end up contained.
 				float frame_aspect = _frame_size.x / _frame_size.y;
 				if (aspect < frame_aspect) {
 					_frame_size.y = _frame_size.x / aspect;
@@ -869,19 +893,18 @@ void streamfx::filter::autoframing::autoframing_instance::tracking_tick(float se
 				}
 			}
 
-			// 2. Limit the size of the frame to the allowed region, and adjust it so it's inside the frame.
-			// This will move the center, which might not be a wanted side effect.
-			vec4 rect;
-			rect.x       = std::clamp<float>(_frame_pos.x - _frame_size.x / 2.f, 0.f, static_cast<float>(_size.first));
-			rect.z       = std::clamp<float>(_frame_pos.x + _frame_size.x / 2.f, 0.f, static_cast<float>(_size.first));
-			rect.y       = std::clamp<float>(_frame_pos.y - _frame_size.y / 2.f, 0.f, static_cast<float>(_size.second));
-			rect.w       = std::clamp<float>(_frame_pos.y + _frame_size.y / 2.f, 0.f, static_cast<float>(_size.second));
-			_frame_pos.x = (rect.x + rect.z) / 2.f;
-			_frame_pos.y = (rect.y + rect.w) / 2.f;
-			_frame_size.x = (rect.z - rect.x);
-			_frame_size.y = (rect.w - rect.y);
+			{ // 3. Ensure frame position results in entire frame visible
+				vec2 frame_pos_min;
+				vec2 frame_pos_max;
+				vec2_divf(&frame_pos_min, &_frame_size, 2.f);
+				vec2_sub(&frame_pos_max, &output_max, &frame_pos_min);
 
-			{ // 3. Adjust the aspect ratio so that it matches the expected output aspect ratio.
+				vec2_max(&_frame_pos, &_frame_pos, &frame_pos_min);
+				vec2_min(&_frame_pos, &_frame_pos, &frame_pos_max);
+			}
+
+			{ // 4. Adjust the aspect ratio so that it matches the expected output aspect ratio.
+			  //   (It should already, but just in case)
 				float frame_aspect = _frame_size.x / _frame_size.y;
 				if (aspect < frame_aspect) {
 					_frame_size.x = _frame_size.y * aspect;
