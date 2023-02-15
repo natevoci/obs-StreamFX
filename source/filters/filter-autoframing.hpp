@@ -63,6 +63,7 @@ namespace streamfx::filter::autoframing {
 			vec2  size;
 			vec2  vel;
 			float confidence;
+			bool  tracking_started;
 		};
 
 		struct pred_el {
@@ -108,6 +109,9 @@ namespace streamfx::filter::autoframing {
 
 		tracking_mode _track_mode;
 		float         _track_frequency;
+		float         _track_start_confidence;
+		float         _track_keep_confidence;
+		float         _track_release_time;
 
 		float _motion_smoothing;
 		float _motion_smoothing_kalman_pnc;

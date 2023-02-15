@@ -56,6 +56,12 @@
  *   Mode: How should things be tracked?
  *     Solo: Frame only a single face.
  *     Group: Frame many faces, group all into single frame.
+ * 
+ *   Start Tracking Confidence: The level of confidence required to start including a tracked face.
+ *   Keep Tracking Confidence: The level of confidence required to keep including a tracked face.
+ *   Release time for lost objects: If the confidence drops below the "Keep Tracking Confidence"
+ *                                  level then after this time the face will no longer be included.
+ * 
  *   Padding: How many pixels/much % of tracked are should be kept
  *   Aspect Ratio: What Aspect Ratio should the framed output have?
  *   Stability: How stable is the framing against changes of tracked elements?
@@ -78,6 +84,12 @@
 #define ST_I18N_FRAMING_MODE_GROUP ST_I18N_TRACKING_MODE ".Group"
 #define ST_KEY_TRACKING_FREQUENCY "Tracking.Frequency"
 #define ST_I18N_TRACKING_FREQUENCY ST_I18N_TRACKING ".Frequency"
+#define ST_KEY_TRACKING_START_TRACKING_CONFIDENCE "Tracking.StartTrackingConfidence"
+#define ST_I18N_TRACKING_START_TRACKING_CONFIDENCE ST_I18N_TRACKING ".StartTrackingConfidence"
+#define ST_KEY_TRACKING_KEEP_TRACKING_CONFIDENCE "Tracking.KeepTrackingConfidence"
+#define ST_I18N_TRACKING_KEEP_TRACKING_CONFIDENCE ST_I18N_TRACKING ".KeepTrackingConfidence"
+#define ST_KEY_TRACKING_RELEASE_TIME "Tracking.ReleaseTime"
+#define ST_I18N_TRACKING_RELEASE_TIME ST_I18N_TRACKING ".ReleaseTime"
 
 #define ST_I18N_MOTION ST_I18N ".Motion"
 #define ST_KEY_MOTION_PREDICTION "Motion.Prediction"
@@ -183,6 +195,8 @@ autoframing_instance::autoframing_instance(obs_data_t* data, obs_source_t* self)
 	  _provider_lock(), _provider_task(),
 
 	  _track_mode(tracking_mode::SOLO), _track_frequency(1),
+	  _track_start_confidence(0.5), _track_keep_confidence(0.5),
+	  _track_release_time(0.5),
 
 	  _motion_smoothing(0.0), _motion_smoothing_kalman_pnc(1.), _motion_smoothing_kalman_mnc(1.),
 	  _motion_prediction(0.0),
@@ -260,6 +274,13 @@ void autoframing_instance::update(obs_data_t* data)
 		}
 	}
 	_track_frequency_counter = 0;
+
+	_track_start_confidence =
+		static_cast<float>(obs_data_get_double(data, ST_KEY_TRACKING_START_TRACKING_CONFIDENCE)) / 100.f;
+	_track_keep_confidence =
+		static_cast<float>(obs_data_get_double(data, ST_KEY_TRACKING_KEEP_TRACKING_CONFIDENCE)) / 100.f;
+	_track_release_time =
+		static_cast<float>(obs_data_get_double(data, ST_KEY_TRACKING_RELEASE_TIME));
 
 	// Motion
 	_motion_prediction           = static_cast<float>(obs_data_get_double(data, ST_KEY_MOTION_PREDICTION)) / 100.f;
@@ -565,50 +586,57 @@ void autoframing_instance::video_render(gs_effect_t* effect)
 						_gfx_debug->draw_line(xPos, y, xPos, y - y_indicator_height, 0xDE0000FF);
 					}
 					// Draw confidence line
-					_gfx_debug->draw_line(x, y, x + kv.first->confidence * kv.first->size.x, y, 0xFFFFFFFF);
+					_gfx_debug->draw_line(
+						x + 1., kv.first->pos.y,
+						x + kv.first->confidence * (kv.first->size.x - 2.), kv.first->pos.y,
+						!kv.first->tracking_started
+							? 0xFF0000FF
+							: ((kv.first->confidence > _track_start_confidence) ? 0x7EFFFFFF : 0xFF0000FF));
 				}
 
 				// Velocity Arrow (Black)
 				_gfx_debug->draw_arrow(kv.first->pos.x, kv.first->pos.y, kv.first->pos.x + kv.first->vel.x,
 									   kv.first->pos.y + kv.first->vel.y, 0., 0x7E000000);
 
-				// Predicted Area (Orange)
-				_gfx_debug->draw_rectangle(kv.second->mp_pos.x - kv.first->size.x / 2.f,
-										   kv.second->mp_pos.y - kv.first->size.y / 2.f, kv.first->size.x,
-										   kv.first->size.y, true, 0x7E007EFF);
+				if (kv.first->tracking_started) {
+					// Predicted Area (Orange)
+					_gfx_debug->draw_rectangle(kv.second->mp_pos.x - kv.first->size.x / 2.f,
+											   kv.second->mp_pos.y - kv.first->size.y / 2.f, kv.first->size.x,
+											   kv.first->size.y, true, 0x7E007EFF);
 
-				// Filtered Area (Yellow)
-				_gfx_debug->draw_rectangle(kv.second->filter_pos_x.get() - kv.second->filter_size_x.get() / 2.f,
-										   kv.second->filter_pos_y.get() - kv.second->filter_size_y.get() / 2.f,
-										   kv.second->filter_size_x.get(),
-										   kv.second->filter_size_y.get(),
-										   true, 0x7E00FFFF);
-				{
-					float x = kv.second->filter_pos_x.get() - kv.second->filter_size_x.get() / 2.f;
-					float y = kv.second->filter_pos_y.get() - kv.second->filter_size_y.get() / 2.f;
-					// Draw index indicator
-					for (int i = 0; i < index; i++) {
-						float xPos = x + (float)i * x_indicator_spacing;
-						_gfx_debug->draw_line(xPos, y, xPos, y - y_indicator_height, 0xDE00FFFF);
+					// Filtered Area (Yellow)
+					_gfx_debug->draw_rectangle(kv.second->filter_pos_x.get() - kv.second->filter_size_x.get() / 2.f,
+											   kv.second->filter_pos_y.get() - kv.second->filter_size_y.get() / 2.f,
+											   kv.second->filter_size_x.get(),
+											   kv.second->filter_size_y.get(),
+											   true, 0x7E00FFFF);
+					{
+						float x = kv.second->filter_pos_x.get() - kv.second->filter_size_x.get() / 2.f;
+						float y = kv.second->filter_pos_y.get() - kv.second->filter_size_y.get() / 2.f;
+						// Draw index indicator
+						for (int i = 0; i < index; i++) {
+							float xPos = x + (float)i * x_indicator_spacing;
+							_gfx_debug->draw_line(xPos, y, xPos, y - y_indicator_height, 0xDE00FFFF);
+						}
 					}
+
+					// Offset Filtered Area (Blue)
+					_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->filter_size_x.get() / 2.f,
+											   kv.second->offset_pos.y - kv.second->filter_size_y.get() / 2.f,
+											   kv.second->filter_size_x.get(),
+											   kv.second->filter_size_y.get(),
+											   true, 0x7EFF0000);
+
+					// Padded Offset Filtered Area (Cyan)
+					_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->pad_size.x / 2.f,
+											   kv.second->offset_pos.y - kv.second->pad_size.y / 2.f, kv.second->pad_size.x,
+											   kv.second->pad_size.y, true, 0x7EFFFF00);
+
+					// Aspect-Ratio-Corrected Padded Offset Filtered Area (Green)
+					_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->aspected_size.x / 2.f,
+											   kv.second->offset_pos.y - kv.second->aspected_size.y / 2.f,
+											   kv.second->aspected_size.x, kv.second->aspected_size.y, true, 0x7E00FF00);
 				}
-
-				// Offset Filtered Area (Blue)
-				_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->filter_size_x.get() / 2.f,
-										   kv.second->offset_pos.y - kv.second->filter_size_y.get() / 2.f,
-										   kv.second->filter_size_x.get(),
-										   kv.second->filter_size_y.get(),
-										   true, 0x7EFF0000);
-
-				// Padded Offset Filtered Area (Cyan)
-				_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->pad_size.x / 2.f,
-										   kv.second->offset_pos.y - kv.second->pad_size.y / 2.f, kv.second->pad_size.x,
-										   kv.second->pad_size.y, true, 0x7EFFFF00);
-
-				// Aspect-Ratio-Corrected Padded Offset Filtered Area (Green)
-				_gfx_debug->draw_rectangle(kv.second->offset_pos.x - kv.second->aspected_size.x / 2.f,
-										   kv.second->offset_pos.y - kv.second->aspected_size.y / 2.f,
-										   kv.second->aspected_size.x, kv.second->aspected_size.y, true, 0x7E00FF00);
 			}
 
 			// Final Region (White)
@@ -670,7 +698,7 @@ void autoframing_instance::video_render(gs_effect_t* effect)
 void streamfx::filter::autoframing::autoframing_instance::tracking_tick(float seconds)
 {
 	{ // Increase the age of all elements, and kill off any that are "too old".
-		float threshold = (0.5f * (1.f / (1.f - _track_frequency)));
+		float threshold = _track_release_time + _track_frequency;
 
 		auto iter = _tracked_elements.begin();
 		while (iter != _tracked_elements.end()) {
@@ -717,6 +745,10 @@ void streamfx::filter::autoframing::autoframing_instance::tracking_tick(float se
 
 		} else {
 			pred = iter->second;
+		}
+
+		if (!trck->tracking_started) {
+			continue;
 		}
 
 		// Calculate absolute velocity.
@@ -780,9 +812,16 @@ void streamfx::filter::autoframing::autoframing_instance::tracking_tick(float se
 
 	{ // Find final frame.
 		bool need_filter = true;
-		if (_predicted_elements.size() > 0) {
+		std::map<std::shared_ptr<track_el>, std::shared_ptr<pred_el>> elements;
+		for (auto kv : _predicted_elements) {
+			if (kv.first->tracking_started) {
+				elements.insert_or_assign(kv.first, kv.second);
+			}
+		}
+
+		if (elements.size() > 0) {
 			if (_track_mode == tracking_mode::SOLO) {
-				auto kv = _predicted_elements.rbegin();
+				auto kv = elements.rbegin();
 
 				_frame_pos_x.filter(kv->second->offset_pos.x);
 				_frame_pos_y.filter(kv->second->offset_pos.y);
@@ -798,7 +837,7 @@ void streamfx::filter::autoframing::autoframing_instance::tracking_tick(float se
 				vec2_set(&min, std::numeric_limits<float>::max(), std::numeric_limits<float>::max());
 				vec2_set(&max, 0., 0.);
 
-				for (auto kv : _predicted_elements) {
+				for (auto kv : elements) {
 					vec2 size;
 					vec2 low;
 					vec2 high;
@@ -1040,12 +1079,6 @@ void streamfx::filter::autoframing::autoframing_instance::nvar_facedetection_pro
 			float confidence = 0.;
 			auto  rect       = _nvidia_fx->at(idx, confidence);
 
-			// Skip elements that have not enough confidence of being a face.
-			// TODO: Make the threshold configurable.
-			if (confidence < .5) {
-				continue;
-			}
-
 			// Calculate centered position.
 			vec2 pos;
 			pos.x = rect.x + (rect.z / 2.f);
@@ -1058,6 +1091,7 @@ void streamfx::filter::autoframing::autoframing_instance::nvar_facedetection_pro
 			vec2_set(&match->vel, 0., 0.);
 			match->age = 0.;
 			match->confidence = confidence > 1.f ? 1.f : confidence; // confidence values go above 1 in SOLO mode.
+			match->tracking_started = (match->confidence >= _track_start_confidence);
 
 			boxes.push_back(match);
 		}
@@ -1093,8 +1127,11 @@ void streamfx::filter::autoframing::autoframing_instance::nvar_facedetection_pro
 				vec2_copy(&el->pos, &match->pos);
 				vec2_copy(&el->size, &match->size);
 				vec2_copy(&el->vel, &vel);
-				el->age = 0.;
+				if (match->confidence >= _track_keep_confidence) {
+					el->age = 0.;
+				}
 				el->confidence = match->confidence;
+				el->tracking_started |= (match->confidence >= _track_start_confidence);
 
 				boxes.erase(match_iter);
 			}
@@ -1189,6 +1226,9 @@ void autoframing_factory::get_defaults2(obs_data_t* data)
 	// Tracking
 	obs_data_set_default_int(data, ST_KEY_TRACKING_MODE, static_cast<int64_t>(tracking_mode::SOLO));
 	obs_data_set_default_string(data, ST_KEY_TRACKING_FREQUENCY, "20 Hz");
+	obs_data_set_default_double(data, ST_KEY_TRACKING_START_TRACKING_CONFIDENCE, 50.);
+	obs_data_set_default_double(data, ST_KEY_TRACKING_KEEP_TRACKING_CONFIDENCE, 50.);
+	obs_data_set_default_double(data, ST_KEY_TRACKING_RELEASE_TIME, 0.5);
 
 	// Motion
 	obs_data_set_default_double(data, ST_KEY_MOTION_SMOOTHING, 33.333);
@@ -1248,6 +1288,24 @@ obs_properties_t* autoframing_factory::get_properties2(autoframing_instance* dat
 		{
 			auto p = obs_properties_add_text(grp, ST_KEY_TRACKING_FREQUENCY, D_TRANSLATE(ST_I18N_TRACKING_FREQUENCY),
 											 OBS_TEXT_DEFAULT);
+		}
+		{
+			auto p = obs_properties_add_float_slider(grp, ST_KEY_TRACKING_START_TRACKING_CONFIDENCE,
+													 D_TRANSLATE(ST_I18N_TRACKING_START_TRACKING_CONFIDENCE),
+													 0.0, 100.0, 1.);
+			obs_property_float_set_suffix(p, " %");
+		}
+		{
+			auto p = obs_properties_add_float_slider(grp, ST_KEY_TRACKING_KEEP_TRACKING_CONFIDENCE,
+													 D_TRANSLATE(ST_I18N_TRACKING_KEEP_TRACKING_CONFIDENCE),
+													 0.0, 100.0, 1.);
+			obs_property_float_set_suffix(p, " %");
+		}
+		{
+			auto p = obs_properties_add_float_slider(grp, ST_KEY_TRACKING_RELEASE_TIME,
+													 D_TRANSLATE(ST_I18N_TRACKING_RELEASE_TIME),
+													 0.0, 10.0, 0.1);
+			obs_property_float_set_suffix(p, " s");
 		}
 	}
 
