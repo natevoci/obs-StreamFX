@@ -811,7 +811,6 @@ void streamfx::filter::autoframing::autoframing_instance::tracking_tick(float se
 	}
 
 	{ // Find final frame.
-		bool need_filter = true;
 		std::map<std::shared_ptr<track_el>, std::shared_ptr<pred_el>> elements;
 		for (auto kv : _predicted_elements) {
 			if (kv.first->tracking_started) {
@@ -826,10 +825,8 @@ void streamfx::filter::autoframing::autoframing_instance::tracking_tick(float se
 				_frame_pos_x.filter(kv->second->offset_pos.x);
 				_frame_pos_y.filter(kv->second->offset_pos.y);
 
-				vec2_set(&_frame_pos, _frame_pos_x.get(), _frame_pos_y.get());
-				vec2_copy(&_frame_size, &kv->second->aspected_size);
-
-				need_filter = false;
+				_frame_size_x.filter(kv->second->aspected_size.x);
+				_frame_size_y.filter(kv->second->aspected_size.y);
 			} else {
 				vec2 min;
 				vec2 max;
@@ -888,11 +885,9 @@ void streamfx::filter::autoframing::autoframing_instance::tracking_tick(float se
 			_frame_size_y.filter(static_cast<float>(_size.second));
 		}
 
-		// Grab filtered data if needed, otherwise stick with direct data.
-		if (need_filter) {
-			vec2_set(&_frame_pos, _frame_pos_x.get(), _frame_pos_y.get());
-			vec2_set(&_frame_size, _frame_size_x.get(), _frame_size_y.get());
-		}
+		// Grab filtered data
+		vec2_set(&_frame_pos, _frame_pos_x.get(), _frame_pos_y.get());
+		vec2_set(&_frame_size, _frame_size_x.get(), _frame_size_y.get());
 
 		{ // Aspect Ratio correction is a three step process:
 			float aspect = _frame_aspect_ratio > 0.
